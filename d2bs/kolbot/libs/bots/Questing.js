@@ -14,6 +14,7 @@
 	const Pickit = require('Pickit');
 	const Pather = require('Pather');
 	const Town = require('Town');
+	const Quests = require('QuestEvents');
 
 	const Questing = {
 
@@ -24,20 +25,88 @@
 			return me.getQuest(id, state);
 		},
 
-		DenOfEvil: function () {
-			return require("../bots/Den")(Config, Attack, Pickit, Pather, Town);
+		getItem: function(questItem, container) {
+			if (me.getItem(questItem)) {
+				return true; // Already has item
+			}
+
+			let chest = getUnit(sdk.unittype.Objects, container);
+			if (!chest) {
+				return false; // Unit does not exist/not nearby.
+			} 
+
+			Misc.openChest(chest);
+
+			let itemOnGround = getUnit(sdk.unittype.Item, questItem); 
+			let tries = 0;
+			while (!itemOnGround && tries < 5) { // Wait for quest item to drop
+				itemOnGround = getUnit(sdk.unittype.Item, questItem);
+				tries++;
+				delay(100);
+			}
+
+			Pickit.pickItems(); // TODO: Automagically add the quest items to pickit
+			return me.getItem(questItem);
 		},
 
-		/*SistersBurialGrounds: function () {
+		transmuteItems: function(endItem, ...components) {
+			if (me.getItem(endItem)) return true;
+			if (!me.inTown) Town();
+			if (!getUIFlag(sdk.uiflags.Cube) && !Town.openStash() || !me.emptyCube()) return false;
 
-		},*/
+			for (let itemId of components) {
+				let item = me.getItems(itemId);
+				if (!item || Storage.Cube.MoveTo(item)) return false;
+			}
+			me.openCube();
+			transmute();
+			let item = me.getItem(endItem);
+			if (!item) return false;
+			if (!Storage.Inventory.MoveTo(item)) {
+				item.drop();
+				delay(100 + me.ping);
+				Pickit.pickItems();
+			}
+
+			if (me.itemoncursor) {
+				// Something went wrong with cubing.
+				randomItem = me.getItems()[0];
+				randomItem.drop();
+				delay(100 + me.ping);
+				Pickit.pickItems();
+			}
+
+			return me.getItem(endItem);
+		},
+
+		DenOfEvil: function () {
+			Quests.on(sdk.quests.DenOfEvil, (state) => {
+				if (state[0]) { // Quest is done.
+					return true;
+				} else if (state[1]) { // Need to talk to Akara
+					var tries = 0;
+					while (!me.inTown && tries < 3) {
+						Pather.journeyTo(sdk.areas.RogueEncampment, true);
+						tries++;
+					}
+					me.talkTo(NPC.Akara);
+				} else {
+					return require("./Den", "bots/")(Config, Attack, Pickit, Pather, Town);
+				}
+			});
+			Quests.emit(sdk.quests.DenOfEvil, Quests.states[sdk.quests.DenOfEvil]);
+		},
+
+		SistersBurialGrounds: function () {
+			return require("./Raven", "bots/quests")(Config, Attack, Pickit, Pather, Town);
+		},
 
 		TheSearchForCain: function () {
-			require("../bots/Cain")(Config, Attack, Pickit, Pather, Town);
+			require("./Cain")(Config, Attack, Pickit, Pather, Town);
 		},
 
 		ForgottenTower: function () {
-			require("../bots/Countess")(Config, Attack, Pickit, Pather, Town);
+			require("./Countess")(Config, Attack, Pickit, Pather, Town);
 		},
 /*
 		ToolsOfTheTrade: function () {
@@ -45,45 +114,49 @@
 		},
 */
 		SistersToTheSlaughter: function () {
-			require("../bots/Andariel")(Config, Attack, Pickit, Pather, Town);
+			require("./Andariel")(Config, Attack, Pickit, Pather, Town);
 		},
-/*
+
 		AbleToGotoActII: function () {
-			
+			require("./AbleToGotoAct")(Config, Pather, Town).actII();
 		},
 
 		SpokeToJerhyn: function () {
 			
 		},
-*/
+
 		RadamentsLair: function () {
-			require("../bots/Radament")(Config, Attack, Pickit, Pather, Town);
-		},
-/*
-		TheHoradricStaff: function () {
-			
+			require("./Radament", "bots/quests")(Config, Attack, Pickit, Pather, Town);
 		},
 
+		TheHoradricStaff: function () {
+			require('./Staff', "bots/quests")(Config, Attack, Pickit, Pather, Town, this.getItem, this.transmuteItems);
+		},
+/*
 		TheTaintedSun: function () {
 			
 		},
 
-		TheArcaneSanctuary: function () {
+		TheArcaneSanctuary: fu	nction () {
 			
 		},
 */
 		TheSummoner: function () {
-			require("../bots/Summoner")(Config, Attack, Pickit, Pather, Town);
+			require("./Summoner")(Config, Attack, Pickit, Pather, Town);
 		},
 
 		TheSevenTombs: function () {
-			require("../bots/Duriel")(Config, Attack, Pickit, Pather, Town);
-		},
-/*
-		AbleToGotoActIII: function () {
-			
+			require("./Duriel")(Config, Attack, Pickit, Pather, Town);
 		},
 
+		AbleToGotoActIII: function () {
+			if (this.checkQuest(sdk.quests.TheSevenTombs, sdk.quests.states.Finished)) {
+				!Pather.accessToAct(3) && this.goToAct(3);
+			} else {
+				this.TheSevenTombs();
+			}
+		},
+/*
 		SpokeToHratli: function () {
 			
 		},
@@ -95,33 +168,33 @@
 		BladeOfTheOldReligion: function () {
 			
 		},
-
+*/
 		KhalimsWill: function () {
-			
+			require("./Khalims")(Config, Attack, Pickit, Pather, Town, this.getItem, this.transmuteItems);
 		},
-
+/*
 		LamEsensTome: function () {
 			
 		},
 */
 		TheBlackenedTemple: function () {
-			require("../bots/Travincal")(Config, Attack, Pickit, Pather, Town);
+			require("./Travincal")(Config, Attack, Pickit, Pather, Town);
 		},
 
 		TheGuardian: function () {
-			require("../bots/Mephisto")(Config, Attack, Pickit, Pather, Town);
-		},
-/*
-		AbleToGotoActIV: function () {
-			
+			require("./Mephisto")(Config, Attack, Pickit, Pather, Town);
 		},
 
+		AbleToGotoActIV: function () {
+			require("./AbleToGotoAct")(Config, Attack, Pickit, Pather, Town).actIV();
+		},
+/*
 		SpokeToTyrael: function () {
 			
 		},
 */
 		TheFallenAngel: function () {
-			require("../bots/Izual")(Config, Attack, Pickit, Pather, Town);
+			require("./Izual")(Config, Attack, Pickit, Pather, Town);
 		},
 /*
 		HellsForge: function () {
@@ -129,13 +202,13 @@
 		},
 */
 		TerrorsEnd: function () {
-			require("../bots/Diablo")(Config, Attack, Pickit, Pather, Town);
-		},
-/*
-		AbleToGotoActV: function () {
-			
+			require("./Diablo")(Config, Attack, Pickit, Pather, Town);
 		},
 
+		AbleToGotoActV: function () {
+			require("./AbleToGotoAct")(Config, Attack, Pickit, Pather, Town).actV();
+		},
+/*
 		SiegeOnHarrogath: function () {
 
 		},
@@ -157,11 +230,11 @@
 		},
 */
 		EveOfDestruction: function () {
-			require("../bots/Baal")(Config, Attack, Pickit, Pather, Town);
+			require("./Baal")(Config, Attack, Pickit, Pather, Town);
 		},
 
 		SecretCowLevel: function () {
-			require("../bots/Cows")(Config, Attack, Pickit, Pather, Town);
+			require("./Cows")(Config, Attack, Pickit, Pather, Town);
 		},
 
 /*
