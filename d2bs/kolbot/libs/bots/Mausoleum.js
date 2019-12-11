@@ -1,34 +1,84 @@
 /**
 *	@filename	Mausoleum.js
-*	@author		kolton
+*	@author		kolton, updated by zmanowar
 *	@desc		clear Mausoleum
 */
 
-function Mausoleum(Config, Attack, Pickit, Pather, Town, Misc) {
-	Town();
+(function (module,require) {
+	const Mausoleum = function (Config, Attack, Pickit, Pather, Town) {
+		Pather.journeyTo(sdk.areas.BurialGrounds, clearPath);
+		if (Config.Mausoleum.killRaven) this.killRaven();
+		this.clearMausoleum();
+		if (Config.Mausoleum.clearCrypt) this.clearCrypt();
+	};
+	const Promise = require('Promise'),
+			Attack = require('Attack'),
+			Pickit = require('Pickit'),
+			Pather = require('Pather'),
+			Town = require('Town'),
+			TownPrecast = require('TownPrecast'),
+			Precast = require('Precast'),
+			Rx = require('Observable'),
+			Graph = require('Graph'),
+			Quests = require('QuestEvents')
+			clearPath = false; // TODO: Set this dynamically
 
-	if (!Pather.journeyTo(17, true)) {
-		throw new Error("Failed to move to Burial Grounds");
-	}
+	Mausoleum.observeQuest = () => {
+		let observable = Rx.Observable.create(observer => {
+			Quests.on(sdk.quests.SistersBurialGrounds, (state) => {
+				observer.next(state);
+				if (state[0]) {
+					observer.complete();
+				} else if (!state[0] && state[1]) {
+					observer.complete();
+				}
+			});
 
-	if (Config.Mausoleum.KillBloodRaven) {
-		Pather.moveToPreset(17, 1, 805);
-		Attack.kill(getLocaleString(3111)); // Blood Raven
-		Pickit.pickItems();
-	}
+			Quests.emit(sdk.quests.SistersBurialGrounds, Quests.states[sdk.quests.SistersBurialGrounds]);
 
-	if (!Pather.moveToExit(19, true)) {
-		throw new Error("Failed to move to Mausoleum");
-	}
+			return () => {
+				Quests.off(sdk.quests.DenOfEvil);
+			};
+		});
+		
+		return observable;
+	};
 
-	Attack.clearLevel(Config.ClearType);
-
-	if (Config.Mausoleum.ClearCrypt) {
-		// Crypt exit is... awkward
-		if (!(Pather.moveToExit(17, true) && Pather.moveToPreset(17, 5, 6) && Pather.moveToExit(18, true))) {
-			throw new Error("Failed to move to Crypt");
+	Mausoleum.killRaven = () => {
+		Pather.moveToExit(sdk.areas.BurialGrounds, true, clearPath);
+		try {
+			Pather.moveToPreset(me.area, sdk.unittype.NPC, 805, 0, 0, clearPath);
+			Attack.clear(15, 0, getLocaleString(sdk.locale.monsters.BloodRaven));
+		} catch(error) {
+			return false; // Blood raven does not exist (she mos' likely ded).
 		}
+		return true;
+	};
 
-		Attack.clearLevel(Config.ClearType);
+	Mausoleum.clearMausoleum = () => {
+		if (!Pather.moveToExit(sdk.areas.Mausoleum, true, clearPath)) {
+			throw new Error('Failed to move to Mausoleum');
+		}
+		Attack.clearLevel();
+	};
+
+	Mausoleum.clearCrypt = () => {
+		if (
+			!(Pather.moveToExit(sdk.areas.BurialGrounds, true) &&
+				Pather.moveToPreset(sdk.areas.BurialGrounds, sdk.unittype.Stairs, 6) &&
+				Pather.moveToExit(sdk.areas.Crypt, true))
+		) {
+			throw new Error('Failed to move to Crypt');
+		}
+		Attack.clearLevel();
 	}
-}
+
+	Mausoleum.talkToAkara = () => {
+		if (!Town.goToTown(1)) {
+			Pather.journeyTo(sdk.areas.RogueEncampment, true);
+		}
+		me.talkTo(NPC.Akara);
+	};
+
+	module.exports = Mausoleum;
+})(typeof module === 'object' && module || {}, typeof require === 'undefined' && (include('require.js') && require) || require );

@@ -80,25 +80,49 @@
 		},
 
 		DenOfEvil: function () {
-			Quests.on(sdk.quests.DenOfEvil, (state) => {
-				if (state[0]) { // Quest is done.
-					return true;
-				} else if (state[1]) { // Need to talk to Akara
-					var tries = 0;
-					while (!me.inTown && tries < 3) {
-						Pather.journeyTo(sdk.areas.RogueEncampment, true);
-						tries++;
+			const Den = require("../bots/Den");
+			Den.observeQuest().subscribe(
+				(state) => {
+					print("Den state :");
+					print(state);
+					if (!state[0] && !state[1]) {
+						Den.clearDen();
 					}
-					me.talkTo(NPC.Akara);
-				} else {
-					return require("./Den", "bots/")(Config, Attack, Pickit, Pather, Town);
+					else if (!state[1]) {
+						Den.talkToAkara();
+					}
+				},
+				(error) => {
+					print("Den error");
+					print(error);
+				},
+				() => {
+					print("Den quest done");
 				}
-			});
-			Quests.emit(sdk.quests.DenOfEvil, Quests.states[sdk.quests.DenOfEvil]);
+			);
 		},
 
 		SistersBurialGrounds: function () {
-			return require("./Raven", "bots/quests")(Config, Attack, Pickit, Pather, Town);
+			const Mausoleum = require("./Mausoleum");
+			Mausoleum.observeQuest().subscribe(
+				(state) => {
+					print("Den state :");
+					print(state);
+					if (!state[0] && !state[1]) {
+						Mausoleum.killRaven();
+					}
+					else if (!state[1]) {
+						Mausoleum.talkToKashya();
+					}
+				},
+				(error) => {
+					print("Mausoleum error");
+					print(error);
+				},
+				() => {
+					print("Mausoleum quest done");
+				}
+			)
 		},
 
 		TheSearchForCain: function () {
